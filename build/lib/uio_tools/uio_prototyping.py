@@ -5,9 +5,9 @@
 # %%
 import matplotlib.pyplot as plt
 import numpy as np
-from CO5BOLDViewer import eosinter
-from uio_utils import UIOLoader, initialise_grid
-from uio_plot_tools import plot_initial_final_heatmap, plot_initial_final_z_trend
+from uio_tools import eosinter
+from uio_tools.uio_utils import UIOLoader, initialise_grid
+from uio_tools.uio_plot_tools import plot_initial_final_heatmap, plot_initial_final_z_trend
 
 # print('\n'.join(plt.style.available))
 plt.style.use('standard-scientific')

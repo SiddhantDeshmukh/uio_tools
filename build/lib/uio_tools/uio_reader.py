@@ -1,11 +1,11 @@
 # %%
-from uio_utils import initialise_grid, average_data_to_plane
-from .quantities import *
+from uio_tools.uio_utils import initialise_grid, average_data_to_plane
+from uio_tools.quantities import *
 
 import re
-import uio
-import eosinter
-import opta
+import uio_tools.uio as uio
+import uio_tools.eosinter as eosinter
+import uio_tools.opta as opta
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.ticker import MaxNLocator
@@ -85,7 +85,8 @@ class UIOData():
     if self.opta:
       self.tau = self['tau']
 
-    self.add_qlmean_quantities()
+    if self.mean:
+      self.add_qlmean_quantities()
 
     # Standard x-z grid
     self.set_grid(*initialise_grid(self.x, self.y, self.z, 'xz'))
@@ -220,7 +221,7 @@ class UIOData():
         data = self.mean_box[key].data
 
       else:
-        data = self.data_dict[key]
+        data = self.data_dict[key]()
     # return data.squeeze()
     return data
 
@@ -309,9 +310,10 @@ class UIOData():
     # Load supplied opacity table
     self.opta = opta.Opac(self.opta_path)
 
-  def load_model(self, model_path: str):
+  def load_model(self, model_path: str, verbose=False):
     model_type = model_path.split('.')[-1]  # either 'full' or 'mean'
-    print(f"Loading model at '{model_path}'")
+    if verbose:
+      print(f"Loading model at '{model_path}'")
 
     model = uio.File(model_path)
     # Current (rough) implementation assumes a mean and full file are both
@@ -320,18 +322,28 @@ class UIOData():
     if model_type == 'full':
       self.full = model
       model_path = model_path.replace('.full', '.mean')
-      print(f"Loading model at '{model_path}'")
+      if verbose:
+        print(f"Loading model at '{model_path}'")
 
-      model = uio.File(model_path)
-      self.mean = model
+      try:
+        model = uio.File(model_path)
+        self.mean = model
+      except FileNotFoundError:
+        if verbose:
+          print(f"{model_path} does not exist. No mean data loaded.")
 
     elif model_type == 'mean':
       self.mean = model
       model_path = model_path.replace('.mean', '.full')
-      print(f"Loading model at '{model_path}'")
+      if verbose:
+        print(f"Loading model at '{model_path}'")
 
-      model = uio.File(model_path)
-      self.full = model
+      try:
+        model = uio.File(model_path)
+        self.full = model
+      except FileNotFoundError:
+        if verbose:
+          print(f"{model_path} does not exist. No full data loaded.")
 
     else:
       print(f"Error: Model of type '{model_type}' not supported, file must\
@@ -465,13 +477,15 @@ class UIOData():
   def update_snapshot(self, snap_idx: int, box_idx=2):
     # Update 'snap_idx', 'dataset' and 'box' properties
     self.snap_idx = snap_idx
-    self.dataset = self.full.dataset[self.snap_idx]
-    self.box = self.dataset.box[0]
-    self.box_keys = [key for key in self.box.keys()]
+    if self.full:
+      self.dataset = self.full.dataset[self.snap_idx]
+      self.box = self.dataset.box[0]
+      self.box_keys = [key for key in self.box.keys()]
 
     # Mean box
-    self.mean_box = self.mean.dataset[self.snap_idx].box[box_idx]
-    self.mean_box_keys = [key for key in self.mean_box.keys()]
+    if self.mean:
+      self.mean_box = self.mean.dataset[self.snap_idx].box[box_idx]
+      self.mean_box_keys = [key for key in self.mean_box.keys()]
 
     # Update quantities
     self.initialise_quantities()

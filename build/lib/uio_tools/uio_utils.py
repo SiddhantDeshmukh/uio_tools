@@ -1,8 +1,7 @@
 # %%
+import re
 import uio_tools.uio as uio
 import uio_tools.eosinter as eosinter
-
-import re
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.ticker import MaxNLocator

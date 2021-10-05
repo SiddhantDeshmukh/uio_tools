@@ -10,6 +10,9 @@ uio_tools/eosinter.py
 uio_tools/eosinterx.c
 uio_tools/eosinterx.cpython-38-x86_64-linux-gnu.so
 uio_tools/eosinterx.pyx
+uio_tools/opta.py
+uio_tools/par.py
+uio_tools/quantities.py
 uio_tools/uio.py
 uio_tools/uio_loader.py
 uio_tools/uio_plot_tools.py

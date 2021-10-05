@@ -16,7 +16,7 @@ try:
 except:
   eosx_available = False
 
-import uio
+import uio_tools.uio
 
 print("eosx available (eosinter):", eosx_available)
 

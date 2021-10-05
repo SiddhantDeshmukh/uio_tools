@@ -99,6 +99,10 @@ class UIOLoader():
     model_idx = self.idx  # store reference before iterating
     self.load_first_model()
 
+    # TODO:
+    # Allow quantities to be stitched together even if the 'keys' passed in
+    # are of different sizes
+
     quantities = []
     for i in range(num_snapshots):
       data = self.current_model.get_quantities_over_snapshots(keys)
@@ -109,7 +113,13 @@ class UIOLoader():
     self.idx = model_idx
     self.load_model()  # revert to original snapshot
 
-    return np.array(quantities)
+    # Reshape to have 'keys' as first axis
+    if len(keys) > 1:
+      quantities = np.swapaxes(quantities, 0, 1)
+    else:
+      quantities = np.array(quantities)
+
+    return quantities
 
   def average_quantities_over_models(self, keys: List[str]):
     # Get specified quantities across all models and then compute the average
