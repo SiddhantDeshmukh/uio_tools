@@ -214,9 +214,9 @@ class UIOData():
     # From the model path, infer temperature, gravity, metallicity,
     # and carbon enhancement, carbon-to-oxygen ratio and chemistry if present
     model = self.model_path.split('/')[-1].split('.')[0]
-    dimension = int(model.split('d')[1][0])
-    temperature = float(model.split('t')[1][:2] + '00')
-    gravity = model.split('g')[1][:2]
+    dimension = int(re.findall(r"d[0-9]", model)[0][1])
+    temperature = float(re.findall(r"t[0-9]+", model)[0][1:])
+    gravity = re.findall(r"g[0-9]+", model)[0][1:]
     gravity = float(f"{gravity[0]}.{gravity[1]}")
 
     self.dimension = dimension

@@ -3,6 +3,7 @@ LICENSE.txt
 README.md
 setup.py
 update.sh
+dist/uio_tools-0.0.1-py3.8.egg
 uio_tools/__init__.py
 uio_tools/eos_mm00_l5.eos
 uio_tools/eosinter.py
@@ -19,6 +20,7 @@ uio_tools.egg-info/PKG-INFO
 uio_tools.egg-info/SOURCES.txt
 uio_tools.egg-info/dependency_links.txt
 uio_tools.egg-info/top_level.txt
+uio_tools/__pycache__/__init__.cpython-38.pyc
 uio_tools/__pycache__/eosinter.cpython-38.pyc
 uio_tools/__pycache__/uio.cpython-38.pyc
 uio_tools/__pycache__/uio_loader.cpython-38.pyc
