@@ -9,7 +9,7 @@ class UIOLoader():
   # List holding filepaths for UIOPlot() instances
   # Contains helper methods to load next, previous models and holds state
   # of plotting variables to be the same across all models
-  def __init__(self, model_directory: str, eos_file='') -> None:
+  def __init__(self, model_directory: str, eos_file='', opta_file='') -> None:
     self.model_dir = model_directory
     self.model_files = None
     self.num_models = None
@@ -18,13 +18,15 @@ class UIOLoader():
     self.current_model = None
     self.current_model_path = None
     self.eos_file = eos_file if eos_file else None
+    self.opta_file = opta_file if opta_file else None
 
     self.load_model_files()
 
   def load_model(self):
     # Load the current model
     self.current_model_path = f"{self.model_files[self.idx]}"
-    self.current_model = UIOData(self.current_model_path, self.eos_file)
+    self.current_model = UIOData(
+        self.current_model_path, self.eos_file, self.opta_file)
 
   def load_first_model(self):
     self.idx = 0
@@ -64,6 +66,10 @@ class UIOLoader():
     # Store references to all 'full' files; UIOData will automatically load
     # Full and Mean Data
     files = glob.glob(os.path.join(self.model_dir, f"*.full"))
+    if not files:
+      print(f"Error: No models found in {self.model_dir}")
+      return None
+
     identifier = files[0].split('/')[-1].split('.')[0]
     filtered_files = [file_ for file_ in files if identifier in file_]
     filtered_files.sort()

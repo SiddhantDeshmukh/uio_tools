@@ -11,12 +11,12 @@ import numexpr as ne
 import numpy as np
 
 try:
-  import eosinterx as eosx
+  import uio_tools.eosinterx as eosx
   eosx_available = True
 except:
   eosx_available = False
 
-import uio_tools.uio as uio
+import uio
 
 print("eosx available (eosinter):", eosx_available)
 

@@ -1,9 +1,11 @@
 # %%
-from uio_tools.uio_utils import initialise_grid
-import uio_tools.uio as uio
-import uio_tools.eosinter as eosinter
+from uio_tools.uio_utils import initialise_grid, average_data_to_plane
+from uio_tools.quantities import *
 
 import re
+import uio_tools.uio as uio
+import uio_tools.eosinter as eosinter
+import uio_tools.opta as opta
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 from matplotlib.ticker import MaxNLocator
@@ -25,7 +27,7 @@ class UIOData():
   # Default behaviour is to analyse plots in a specific directory since I
   # organise separate runs in separate directories
   # Contains Full and Mean file data
-  def __init__(self, model_path: str, eos_file='') -> None:
+  def __init__(self, model_path: str, eos_file='', opta_file='', par_file='') -> None:
     # Properties
     self.dataset = None
     self.box = None
@@ -33,7 +35,11 @@ class UIOData():
     self.id = model_path.split('/')[-1].split('.')[0]
     self.box_keys = None
     self.eos_path = eos_file if eos_file else None
+    self.opta_path = opta_file if opta_file else None
+    self.par_path = par_file if par_file else None
     self.eos = None
+    self.opta = None
+    self.par = None
 
     # Model quantities
     self.dimension = None
@@ -57,11 +63,14 @@ class UIOData():
     # Infer quantities from model name
     self.infer_quantities()
 
+    if self.eos_path:
+      self.load_eos()
+
+    if self.opta_path:
+      self.load_opta()
+
     # Load the specified model
     self.load_model(model_path)
-
-    if self.eos_path is not None:
-      self.load_eos()
 
     # Save initial and final times
     self.initial_time = self.get_time()
@@ -69,21 +78,119 @@ class UIOData():
     self.final_time = self.get_time()
     self.first_snapshot()
 
-    # x, y, z arrays from full file
-    self.x = self['xc1']
-    self.y = self['xc2']
-    self.z = self['xc3']
-
-    # Mean z
-    self.z_mean = self
+    # Call this upon updating snapshot!
+    self.initialise_quantities()
 
     # Optical depth
-    self.tau = None
+    if self.opta:
+      self.tau = self['tau']
 
     self.add_qlmean_quantities()
 
     # Standard x-z grid
     self.set_grid(*initialise_grid(self.x, self.y, self.z, 'xz'))
+
+  def initialise_quantities(self):
+    # Initialise basic quantities for the model
+    # x, y, z arrays from full file
+    self.x, self.y, self.z = self.get_x_vectors(self.box)
+    self.v1, self.v2, self.v3 = self.get_velocity_vectors(self.box)
+
+    if self.eos:
+      self.initialise_eos_quantities()
+
+    if self.opta:
+      self.initialise_opta_quantities()
+
+    self.initialise_data_dict()
+
+  def initialise_data_dict(self):
+    # Initialise data dict
+    x, y, z = self.x, self.y, self.z
+    v1, v2, v3 = self.v1, self.v2, self.v3
+    self.data_dict = {
+        # TODO:
+        # Turn everything into lambda statements and evaluate on return
+        # Position (grid cells)
+        'x': lambda: x,
+        'xc1': lambda: x,
+        'y': lambda: y,
+        'xc2': lambda: y,
+        'z': lambda: z,
+        'xc3': lambda: z,
+        'xc_all': lambda: [x, y, z],
+        # Basic quantities from box
+        'rho': lambda: self.get_box_quantity('rho'),
+        'density': lambda: self.get_box_quantity('rho'),
+        'ei': lambda: self.get_box_quantity('ei'),
+        'energy': lambda: self.get_box_quantity('ei'),
+        # 2D grids
+        'xy_grid': lambda: np.meshgrid(x, y),
+        'xz_grid': lambda: np.meshgrid(x, z),
+        'yz_grid': lambda: np.meshgrid(y, z),
+        # 2D grids, pick one
+        'xyx_grid': lambda: np.meshgrid(x, y)[0],
+        'xyy_grid': lambda: np.meshgrid(x, y)[1],
+        'xzx_grid': lambda: np.meshgrid(x, z)[0],
+        'xzz_grid': lambda: np.meshgrid(x, z)[1],
+        'yzy_grid': lambda: np.meshgrid(y, z)[0],
+        'yzz_grid': lambda: np.meshgrid(y, z)[1],
+        # Velocities
+        'vx': lambda: v1,
+        'v1': lambda: v1,
+        'vy': lambda: v2,
+        'v2': lambda: v2,
+        'vz': lambda: v3,
+        'v3': lambda: v3,
+        'v': lambda: [v1, v2, v3],
+        'velocities': lambda: [v1, v2, v3],
+        'v_squared': lambda: (self.v1**2 + self.v2**2 + self.v3**2),
+        'abs_v': lambda: np.sqrt(self.v_squared),
+        # Time
+        't': self.get_time,
+        'time': self.get_time,
+        'modeltime': self.get_time,
+        'kinetic energy': lambda: calculate_kinetic_energy(self.rho, self.v1, self.v2, self.v3),
+        'ke': lambda: calculate_kinetic_energy(self.rho, self.v1, self.v2, self.v3),
+        'momentum': lambda: calculate_momentum(self.rho, self.v1, self.v2, self.v3),
+        # EOS quantities
+        'pressure': lambda: self.P,
+        'temperature': lambda: self.T,
+        'entropy': lambda: self.S,
+        'dpdrho': lambda: self.dPdrho,
+        'dpdei': lambda: self.dPdei,
+        'dtdei': lambda: self.dTdei,
+        # OPTA quantities
+        'opacity': lambda: self.kappa,
+        'optical depth': lambda: self.tau,
+        # Thermodynamic quantities
+        'gamma_1': lambda: (self.rho / self.P) * self.dPdrho + (1 / self.rho) * self.dPdei,
+        'gamma_3': lambda: 1 + (1 / self.rho) * self.dPdei,
+        'grad_t': lambda: (self.gamma_3 - 1) / self.gamma_1,
+        'cv_prime': lambda: (self.P / (self.rho * self.T)) * (1 / self.gamma_3 - 1),
+        'cp_prime': lambda: (self.P / (self.rho * self.T)) * (self.gamma_1 / (self.gamma_3 - 1)),
+        # Hydrodynamic quantities
+        'c_s': lambda: np.sqrt(self.gamma_1 * self.P / self.rho),
+        'M_cs': lambda: self.abs_v / self.c_s,
+
+    }
+
+  def initialise_eos_quantities(self):
+    rho, ei = self.rho, self.ei
+    self.P, self.dPdrho, self.dPdei = self.eos.Pall(rho, ei)
+    self.T, self.dTdei = self.eos.Tall(rho, ei)
+    self.S = self.eos.STP(rho, ei, quantity='e')
+    self.dTdrho = (self.T / rho**2) * self.dPdei - \
+        (self.P / rho**2) * self.dTdei
+
+  def initialise_opta_quantities(self):
+    rho, P, T = self.rho, self.P, self.T
+    self.kappa = self.opta.kappa(T, P)
+    self.tau = self.opta.tau(rho, P=P, T=T, z=self.z, axis=0)
+
+  def get_box_quantity(self, key: str):
+    # Get quantity from 'box'
+    return self.box[key].data
 
   def __getitem__(self, key: str) -> np.ndarray:
     # !!!
@@ -101,7 +208,7 @@ class UIOData():
       pattern = r'|'.join([f"\{opt}" for opt in opts])
       opt_keys = [o_key.strip() for o_key in re.split(pattern, key)]
 
-      # Replac expressions in 'key'
+      # Replace expressions in 'key'
       for opt_key in opt_keys:
         key = key.replace(opt_key, f"self['{opt_key}']")
 
@@ -113,91 +220,12 @@ class UIOData():
         data = self.mean_box[key].data
 
       else:
+        data = self.data_dict[key]
+    # return data.squeeze()
+    return data
 
-        # Derived quantities
-        if key.lower() in ['x', 'xc1', 'y', 'xc2', 'z', 'xc3', 'xc_all']:
-          x, y, z = self.get_x_vectors(self.box)
-
-          data_dict = {
-              'x': x,
-              'xc1': x,
-              'y': y,
-              'xc2': y,
-              'z': z,
-              'xc3': z,
-              'xc_all': [x, y, z]
-          }
-
-          data = data_dict[key]
-
-        # Here, the first two letters specify the grid and the third letter
-        # (if available) specifies which grid to return
-        elif key.lower() in ['xy_grid', 'xz_grid', 'yz_grid',  # both grids
-                             # single grids
-                             'xyx_grid', 'xyy_grid',
-                             'xzx_grid', 'xzz_grid',
-                             'yzy_grid',  'yzz_grid']:
-          x, y, z = self.get_x_vectors(self.box)
-
-          data_dict = {
-              'xy_grid': np.meshgrid(x, y),
-              'xz_grid': np.meshgrid(x, z),
-              'yz_grid': np.meshgrid(y, z),
-              'xyx_grid': np.meshgrid(x, y)[0],
-              'xyy_grid': np.meshgrid(x, y)[1],
-              'xzx_grid': np.meshgrid(x, z)[0],
-              'xzz_grid': np.meshgrid(x, z)[1],
-              'yzy_grid': np.meshgrid(y, z)[0],
-              'yzz_grid': np.meshgrid(y, z)[1],
-          }
-
-          data = data_dict[key]
-
-        elif key.lower() in ['vx', 'vy', 'vz', 'v', 'velocities']:
-          v1, v2, v3 = self.get_velocity_vectors(self.box)
-
-          data_dict = {
-              'vx': v1,
-              'vy': v2,
-              'vz': v3,
-              'v': [v1, v2, v3],
-              'velocities': [v1, v2, v3]
-          }
-
-          data = data_dict[key]
-
-        elif key.lower() in ['t', 'time', 'modeltime']:
-          data = self.get_time()
-
-        elif key.lower() == 'kinetic energy':
-          # Calculate kinetic energy with density and velocities
-          density = self.box['rho'].data
-          v1, v2, v3 = self.get_velocity_vectors(self.box)
-
-          # Full 3D kinetic energy
-          data = calculate_kinetic_energy(density, v1, v2, v3)
-
-        elif key.lower() == 'momentum':
-          # Calculate momentum with density and velocities
-          density = self.box['rho'].data
-          v1, v2, v3 = self.get_velocity_vectors(self.box)
-
-          # Full 3D momentum
-          data = calculate_momentum(density, v1, v2, v3)
-
-        elif key.lower() in ['time', 'modeltime']:
-          data = self.get_time()
-
-        # EOS quantities
-        elif key.lower() in ['temperature', 'pressure', 'entropy']:
-          rho, ei = self.box['rho'].data, self.box['ei'].data
-          data = self.eos.STP(rho, ei, quantity=key)
-
-        # Box quantities
-        else:
-          data = self.box[key].data
-
-    return data.squeeze()
+  def __getattr__(self, name):
+    return self[name]
 
   def quantity_from_model_id(self, search_character: str, num_characters: int):
     # Given the character to search for and the number of characters
@@ -215,7 +243,7 @@ class UIOData():
     # and carbon enhancement, carbon-to-oxygen ratio and chemistry if present
     model = self.model_path.split('/')[-1].split('.')[0]
     dimension = int(re.findall(r"d[0-9]", model)[0][1])
-    temperature = float(re.findall(r"t[0-9]+", model)[0][1:])
+    temperature = float(re.findall(r"t[0-9]+", model)[0][1:] + '00')
     gravity = re.findall(r"g[0-9]+", model)[0][1:]
     gravity = float(f"{gravity[0]}.{gravity[1]}")
 
@@ -277,6 +305,10 @@ class UIOData():
     # Load the supplied equation of state file
     self.eos = eosinter.EosInter(self.eos_path)
 
+  def load_opta(self):
+    # Load supplied opacity table
+    self.opta = opta.Opac(self.opta_path)
+
   def load_model(self, model_path: str):
     model_type = model_path.split('.')[-1]  # either 'full' or 'mean'
     print(f"Loading model at '{model_path}'")
@@ -318,21 +350,22 @@ class UIOData():
   def add_qlmean_quantities(self):
     # 'gravity' defined on linear scale
     self.set_mean_box(2)
-    z = self.get_x_vectors(convert_km=False)[2].squeeze()
+    # z = self.get_x_vectors(convert_km=False)[2].squeeze()
     xcm = self['kapparho_xmean']
-    tau0 = xcm[-1] / self['rho_xmean'][-1] * \
-        self['p_xmean'][-1] / self.gravity
+    # tau0 = xcm[-1] / self['rho_xmean'][-1] * \
+    #     self['p_xmean'][-1] / self.gravity
 
     # # Reverse 'xcm' to be monotonically decreasing to get correct integral
-    interp = PchipInterpolator(z, xcm[::-1])
+    # interp = PchipInterpolator(z, xcm[::-1])
     # Integrate kappa-rho over z to get tau
     # self.tau = cumtrapz(self['kapparho_xmean'], z)
     self.frad = self['ferb_xmean']
-    self.tau = tau0 + interp.antiderivative()(z)
+    # self.tau = tau0 + interp.antiderivative()(z)
 
   def quantity_at_tau_val(self, quantity: str, tau_val: float):
     # 'tau_val' on linear scale
-    return interp1d(self.tau, self[quantity])(tau_val)
+    tau = np.mean(self.tau.squeeze(), axis=1)
+    return interp1d(tau, self[quantity])(tau_val)
 
   def z_zero_point(self, kind='tau', tau_val=1):
     # set the 'z' zero point
@@ -353,7 +386,7 @@ class UIOData():
       # Use tau=1 as standard
       zero_point = self.z_zero_point()
 
-    self.z -= zero_point
+    self.z = self['z'] - zero_point
 
   def set_gravity(self, gravity: float):
     self.gravity = gravity
@@ -398,8 +431,8 @@ class UIOData():
     # if specified
     pressure, temperature = self['pressure'], self['temperature']
     if axis_mean:
-      pressure = np.mean(pressure, axis=axis_mean)
-      temperature = np.mean(temperature, axis=axis_mean)
+      pressure = np.mean(pressure.squeeze(), axis=axis_mean)
+      temperature = np.mean(temperature.squeeze(), axis=axis_mean)
 
     return pressure, temperature
 
@@ -439,6 +472,9 @@ class UIOData():
     # Mean box
     self.mean_box = self.mean.dataset[self.snap_idx].box[box_idx]
     self.mean_box_keys = [key for key in self.mean_box.keys()]
+
+    # Update quantities
+    self.initialise_quantities()
 
   # -----------------------------------------------------------------------
   # Methods that loop over all snapshots to calculate quantities
@@ -578,10 +614,18 @@ class UIOData():
       dataset = self.dataset
     return dataset['modeltime'].data
 
+  def get_final_time(self, dataset=None):
+    snap_idx = self.snap_idx
+    self.final_snapshot()
+    final_time = self.get_time(dataset=dataset)
+    self.update_snapshot(snap_idx)
+
+    return final_time
+
   def get_time_difference(self, snap_idx1: int, snap_idx2: int):
     # Calculate the time difference between two snapshots
-    time1 = self.get_dataset_from_snapshot(snap_idx1)
-    time2 = self.get_dataset_from_snapshot(snap_idx2)
+    time1 = self.get_dataset_from_snapshot(snap_idx1)['modeltime'].data
+    time2 = self.get_dataset_from_snapshot(snap_idx2)['modeltime'].data
 
     return time2 - time1
 
@@ -589,6 +633,7 @@ class UIOData():
   # Plotting methods
   # -----------------------------------------------------------------------
 
+  # This should be a separate function in a plotting module
   def plot_heatmap(self, ax, plot_values, log_quantity=False, title=None,
                    plot_type='image', add_cbar=True, cbar=None,
                    cmap='jet', cbar_label='infer', cbar_label_pos='bottom',
@@ -726,7 +771,7 @@ class UIOData():
     #   name, unit = self.get_key_name_units(key)
     #   cbar_label = name
 
-    cbar = self.plot_heatmap(ax, avg_data, log_quantity=log_quantity,
+    cbar = self.plot_heatmap(ax, avg_data.squeeze(), log_quantity=log_quantity,
                              plot_type='image', origin=origin,
                              title=title, cmap=cmap, add_cbar=add_cbar,
                              cbar_label=cbar_label,
@@ -794,7 +839,7 @@ class UIOData():
       if log_key:
         data = np.log10(data)
 
-      data_list.append(data)
+      data_list.append(data.squeeze())
 
     # Plot key1 data vs key2 data
     if colour:

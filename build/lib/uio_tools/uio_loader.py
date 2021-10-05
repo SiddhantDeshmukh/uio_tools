@@ -103,7 +103,8 @@ class UIOLoader():
     self.idx = model_idx
     self.load_model()  # revert to original snapshot
 
-    return np.array(quantities)
+    print(np.array(quantities).shape)
+    return np.array(quantities).T  # num models as second index
 
   def average_quantities_over_models(self, keys: List[str]):
     # Get specified quantities across all models and then compute the average
