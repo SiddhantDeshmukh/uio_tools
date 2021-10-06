@@ -25,6 +25,8 @@ uio_tools.egg-info/dependency_links.txt
 uio_tools.egg-info/top_level.txt
 uio_tools/__pycache__/__init__.cpython-38.pyc
 uio_tools/__pycache__/eosinter.cpython-38.pyc
+uio_tools/__pycache__/opta.cpython-38.pyc
+uio_tools/__pycache__/quantities.cpython-38.pyc
 uio_tools/__pycache__/uio.cpython-38.pyc
 uio_tools/__pycache__/uio_loader.cpython-38.pyc
 uio_tools/__pycache__/uio_reader.cpython-38.pyc

@@ -4,19 +4,20 @@ Created on Mon Nov 16 19:27:59 2015
 
 @author: René Georg Salhab
 """
-
 from __future__ import division, print_function
-
-import numexpr as ne
 import numpy as np
+import numexpr as ne
+import uio_tools.uio as uio
+
 
 try:
+  import pyximport
+  pyximport.install()
   import uio_tools.eosinterx as eosx
   eosx_available = True
 except:
   eosx_available = False
 
-import uio_tools.uio
 
 print("eosx available (eosinter):", eosx_available)
 

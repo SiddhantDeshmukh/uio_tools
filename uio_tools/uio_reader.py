@@ -69,6 +69,9 @@ class UIOData():
     if self.opta_path:
       self.load_opta()
 
+    print(self.eos)
+    print(self.opta)
+
     # Load the specified model
     self.load_model(model_path)
 
@@ -83,7 +86,7 @@ class UIOData():
 
     # Optical depth
     if self.opta:
-      self.tau = self['tau']
+      self.tau = self['optical depth']
 
     if self.mean:
       self.add_qlmean_quantities()
@@ -154,6 +157,9 @@ class UIOData():
         'kinetic energy': lambda: calculate_kinetic_energy(self.rho, self.v1, self.v2, self.v3),
         'ke': lambda: calculate_kinetic_energy(self.rho, self.v1, self.v2, self.v3),
         'momentum': lambda: calculate_momentum(self.rho, self.v1, self.v2, self.v3),
+    }
+
+    eos_dict = {
         # EOS quantities
         'pressure': lambda: self.P,
         'temperature': lambda: self.T,
@@ -161,9 +167,6 @@ class UIOData():
         'dpdrho': lambda: self.dPdrho,
         'dpdei': lambda: self.dPdei,
         'dtdei': lambda: self.dTdei,
-        # OPTA quantities
-        'opacity': lambda: self.kappa,
-        'optical depth': lambda: self.tau,
         # Thermodynamic quantities
         'gamma_1': lambda: (self.rho / self.P) * self.dPdrho + (1 / self.rho) * self.dPdei,
         'gamma_3': lambda: 1 + (1 / self.rho) * self.dPdei,
@@ -173,11 +176,22 @@ class UIOData():
         # Hydrodynamic quantities
         'c_s': lambda: np.sqrt(self.gamma_1 * self.P / self.rho),
         'M_cs': lambda: self.abs_v / self.c_s,
-
     }
 
+    opta_dict = {
+        # OPTA quantities
+        'opacity': lambda: self.kappa,
+        # 'optical depth': lambda: self.tau,
+    }
+
+    if self.eos:
+      self.data_dict.update(eos_dict)
+
+    if self.opta:
+      self.data_dict.update(opta_dict)
+
   def initialise_eos_quantities(self):
-    rho, ei = self.rho, self.ei
+    rho, ei = self.get_box_quantity('rho'), self.get_box_quantity('ei')
     self.P, self.dPdrho, self.dPdei = self.eos.Pall(rho, ei)
     self.T, self.dTdei = self.eos.Tall(rho, ei)
     self.S = self.eos.STP(rho, ei, quantity='e')
@@ -185,7 +199,7 @@ class UIOData():
         (self.P / rho**2) * self.dTdei
 
   def initialise_opta_quantities(self):
-    rho, P, T = self.rho, self.P, self.T
+    rho, P, T = self.get_box_quantity('rho'), self.P, self.T
     self.kappa = self.opta.kappa(T, P)
     self.tau = self.opta.tau(rho, P=P, T=T, z=self.z, axis=0)
 
@@ -221,12 +235,16 @@ class UIOData():
         data = self.mean_box[key].data
 
       else:
+        print(key)
         data = self.data_dict[key]()
     # return data.squeeze()
     return data
 
-  def __getattr__(self, name):
-    return self[name]
+  # WARNING:
+  # Adding this throws recursion errors when referencing the data_dict becuase
+  # 'self.data_dict' then goes into the data_dict itself!
+  # def __getattr__(self, name):
+  #   return self[name]
 
   def quantity_from_model_id(self, search_character: str, num_characters: int):
     # Given the character to search for and the number of characters

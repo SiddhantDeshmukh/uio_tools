@@ -1,1 +1,2 @@
 uio_tools
+uio_tools/eosinterx

@@ -99,6 +99,10 @@ class UIOLoader():
     model_idx = self.idx  # store reference before iterating
     self.load_first_model()
 
+    # TODO:
+    # Allow quantities to be stitched together even if the 'keys' passed in
+    # are of different sizes
+
     quantities = []
     for i in range(num_snapshots):
       data = self.current_model.get_quantities_over_snapshots(keys)
