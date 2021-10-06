@@ -24,6 +24,8 @@ sigma_sb = 5.67050e-05  # Stefan-Boltzmann constant, [erg cm^-2 s^-1 K^-4]
 
 
 class UIOData():
+  # TODO:
+  # Improve efficiency of loading data!
   # Default behaviour is to analyse plots in a specific directory since I
   # organise separate runs in separate directories
   # Contains Full and Mean file data
@@ -68,9 +70,6 @@ class UIOData():
 
     if self.opta_path:
       self.load_opta()
-
-    print(self.eos)
-    print(self.opta)
 
     # Load the specified model
     self.load_model(model_path)
@@ -180,8 +179,10 @@ class UIOData():
 
     opta_dict = {
         # OPTA quantities
+        'kappa': lambda: self.kappa,
         'opacity': lambda: self.kappa,
-        # 'optical depth': lambda: self.tau,
+        'tau': lambda: self.tau,
+        'optical depth': lambda: self.tau,
     }
 
     if self.eos:
@@ -201,7 +202,7 @@ class UIOData():
   def initialise_opta_quantities(self):
     rho, P, T = self.get_box_quantity('rho'), self.P, self.T
     self.kappa = self.opta.kappa(T, P)
-    self.tau = self.opta.tau(rho, P=P, T=T, z=self.z, axis=0)
+    self.tau = self.opta.tau(rho, kappa=self.kappa, z=self.z * 1e5, axis=0)
 
   def get_box_quantity(self, key: str):
     # Get quantity from 'box'
@@ -235,7 +236,6 @@ class UIOData():
         data = self.mean_box[key].data
 
       else:
-        print(key)
         data = self.data_dict[key]()
     # return data.squeeze()
     return data

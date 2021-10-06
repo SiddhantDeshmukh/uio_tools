@@ -69,9 +69,6 @@ class UIOData():
     if self.opta_path:
       self.load_opta()
 
-    print(self.eos)
-    print(self.opta)
-
     # Load the specified model
     self.load_model(model_path)
 
@@ -181,7 +178,7 @@ class UIOData():
     opta_dict = {
         # OPTA quantities
         'opacity': lambda: self.kappa,
-        # 'optical depth': lambda: self.tau,
+        'optical depth': lambda: self.tau,
     }
 
     if self.eos:
@@ -235,7 +232,6 @@ class UIOData():
         data = self.mean_box[key].data
 
       else:
-        print(key)
         data = self.data_dict[key]()
     # return data.squeeze()
     return data

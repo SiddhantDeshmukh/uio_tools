@@ -3,6 +3,7 @@ LICENSE.txt
 README.md
 setup.py
 update.sh
+dist/uio_tools-0.0.1-py3.8-linux-x86_64.egg
 dist/uio_tools-0.0.1-py3.8.egg
 uio_tools/__init__.py
 uio_tools/eos_mm00_l5.eos
