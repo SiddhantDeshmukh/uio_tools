@@ -11,7 +11,7 @@ from matplotlib.colors import Normalize
 from matplotlib.ticker import MaxNLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
-from typing import List, Union
+from typing import Dict, List, Union
 from scipy.interpolate import interp1d, PchipInterpolator
 # print('\n'.join(plt.style.available))
 plt.style.use('standard-scientific')
@@ -24,6 +24,8 @@ sigma_sb = 5.67050e-05  # Stefan-Boltzmann constant, [erg cm^-2 s^-1 K^-4]
 
 
 class UIOData():
+  # TODO:
+  # Improve efficiency of loading data!
   # Default behaviour is to analyse plots in a specific directory since I
   # organise separate runs in separate directories
   # Contains Full and Mean file data
@@ -177,7 +179,9 @@ class UIOData():
 
     opta_dict = {
         # OPTA quantities
+        'kappa': lambda: self.kappa,
         'opacity': lambda: self.kappa,
+        'tau': lambda: self.tau,
         'optical depth': lambda: self.tau,
     }
 
@@ -198,7 +202,7 @@ class UIOData():
   def initialise_opta_quantities(self):
     rho, P, T = self.get_box_quantity('rho'), self.P, self.T
     self.kappa = self.opta.kappa(T, P)
-    self.tau = self.opta.tau(rho, P=P, T=T, z=self.z, axis=0)
+    self.tau = self.opta.tau(rho, kappa=self.kappa, z=self.z * 1e5, axis=0)
 
   def get_box_quantity(self, key: str):
     # Get quantity from 'box'
@@ -547,25 +551,29 @@ class UIOData():
 
     return avg_quantity
 
-  def get_quantities_over_snapshots(self, keys: List[str]):
+  def get_quantities_over_snapshots(self, keys: List[str], as_arrays=True) -> Dict:
     # Create a list of quantity 'key' across all snapshots
     num_snapshots = self.final_snap_idx + 1
     snap_idx = self.snap_idx  # store reference before iterating
     self.first_snapshot()
 
-    output_quantities = []
+    output_quantities = {}
     for i in range(num_snapshots):
-      if len(keys) == 1:
-        quantities = self[keys[0]]
-      else:
-        quantities = [self[key] for key in keys]
-      output_quantities.append(quantities)
+      for key in keys:
+        if not key in output_quantities:
+          output_quantities[key] = [self[key]]
+        else:
+          output_quantities[key].append(self[key])
 
       self.next_snapshot()
 
+    # Convert lists to arrays
+    if as_arrays:
+      output_quantities = {key: np.array(val)
+                           for key, val in output_quantities.items()}
     self.update_snapshot(snap_idx)  # revert to original snapshot
 
-    return np.array(output_quantities)
+    return output_quantities
 
   def min_max_quantity_over_snapshots(self, key: str):
     # Get min & max of specified 'key' from 'self.box' across all snapshots

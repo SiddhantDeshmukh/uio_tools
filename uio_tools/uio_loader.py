@@ -99,25 +99,23 @@ class UIOLoader():
     model_idx = self.idx  # store reference before iterating
     self.load_first_model()
 
-    # TODO:
-    # Allow quantities to be stitched together even if the 'keys' passed in
-    # are of different sizes
-
-    quantities = []
+    quantities = {}
     for i in range(num_snapshots):
-      data = self.current_model.get_quantities_over_snapshots(keys)
-      quantities.extend(data)
+      data = self.current_model.get_quantities_over_snapshots(keys,
+                                                              as_arrays=False)
+      for key in data.keys():
+        if not key in quantities:
+          quantities[key] = [data[key]]
+        else:
+          quantities[key].append(data[key])
 
       self.load_next_model()
 
     self.idx = model_idx
     self.load_model()  # revert to original snapshot
 
-    # Reshape to have 'keys' as first axis
-    if len(keys) > 1:
-      quantities = np.swapaxes(quantities, 0, 1)
-    else:
-      quantities = np.array(quantities)
+    # Convert to arrays
+    quantities = {key: np.array(val) for key, val in quantities.items()}
 
     return quantities
 
