@@ -105,9 +105,10 @@ class UIOLoader():
                                                               as_arrays=False)
       for key in data.keys():
         if not key in quantities:
-          quantities[key] = [data[key]]
+          quantities[key] = data[key]
         else:
-          quantities[key].append(data[key])
+          # Append on 'snaps' axis
+          quantities[key] += (data[key])
 
       self.load_next_model()
 
