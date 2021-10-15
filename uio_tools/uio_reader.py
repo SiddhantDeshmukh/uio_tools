@@ -1,4 +1,5 @@
 # %%
+from posix import listdir
 from uio_tools.uio_utils import initialise_grid, average_data_to_plane
 from uio_tools.quantities import *
 
@@ -13,6 +14,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from typing import Dict, List, Union
 from scipy.interpolate import interp1d, PchipInterpolator
+import os
+
 # print('\n'.join(plt.style.available))
 plt.style.use('standard-scientific')
 
@@ -65,6 +68,9 @@ class UIOData():
     # Infer quantities from model name
     self.infer_quantities()
 
+    # If no eos, opta, par file, try to find them in the current directory
+    self.eos_path, self.opta_path, self.par_path = self.init_pars()
+
     if self.eos_path:
       self.load_eos()
 
@@ -72,16 +78,17 @@ class UIOData():
       self.load_opta()
 
     # Load the specified model
-    self.load_model(model_path)
+    self.load_model(model_path, initialise_quantities=True,
+                    load_eos=self.eos_path, load_opta=self.opta_path)
 
     # Save initial and final times
     self.initial_time = self.get_time()
-    self.final_snapshot()
+    self.final_snapshot(initialise_quantities=False)
     self.final_time = self.get_time()
-    self.first_snapshot()
+    self.first_snapshot(initialise_quantities=False)
 
-    # Call this upon updating snapshot!
-    self.initialise_quantities()
+    # # Call this upon updating snapshot!
+    # self.initialise_quantities()
 
     # Optical depth
     if self.opta:
@@ -93,16 +100,35 @@ class UIOData():
     # Standard x-z grid
     self.set_grid(*initialise_grid(self.x, self.y, self.z, 'xz'))
 
-  def initialise_quantities(self):
+  def init_pars(self):
+    # Find 'eos' 'opta' 'par' file in same dir as 'model_path' if they are not
+    # supplied
+    extensions = [".eos", ".opta", ".par"]
+    paths = []
+    for path, extension in zip([self.eos_path, self.opta_path, self.par_path], extensions):
+      if not path:
+        try:
+          model_dir = os.path.dirname(self.model_path)
+          path = [f"{model_dir}/{f}" for f in os.listdir(model_dir)
+                  if f.endswith(extension)]
+          paths.append(path[0])
+        except IndexError:
+          # Path not found
+          paths.append(None)
+          pass
+
+    return paths
+
+  def initialise_quantities(self, load_eos=False, load_opta=False):
     # Initialise basic quantities for the model
     # x, y, z arrays from full file
     self.x, self.y, self.z = self.get_x_vectors(self.box)
     self.v1, self.v2, self.v3 = self.get_velocity_vectors(self.box)
 
-    if self.eos:
+    if load_eos and self.eos:
       self.initialise_eos_quantities()
 
-    if self.opta:
+    if load_opta and self.opta:
       self.initialise_opta_quantities()
 
     self.initialise_data_dict()
@@ -147,8 +173,8 @@ class UIOData():
         'v3': lambda: v3,
         'v': lambda: [v1, v2, v3],
         'velocities': lambda: [v1, v2, v3],
-        'v_squared': lambda: (self.v1**2 + self.v2**2 + self.v3**2),
-        'abs_v': lambda: np.sqrt(self.v_squared),
+        'v_squared': lambda: (self['v1']**2 + self['v2']**2 + self['v3']**2),
+        'abs_v': lambda: np.sqrt(self['v_squared']),
         # Time
         't': self.get_time,
         'time': self.get_time,
@@ -158,7 +184,7 @@ class UIOData():
         'momentum': lambda: calculate_momentum(self.rho, self.v1, self.v2, self.v3),
     }
 
-    eos_dict = {
+    self.eos_dict = {
         # EOS quantities
         'pressure': lambda: self.P,
         'temperature': lambda: self.T,
@@ -167,17 +193,17 @@ class UIOData():
         'dpdei': lambda: self.dPdei,
         'dtdei': lambda: self.dTdei,
         # Thermodynamic quantities
-        'gamma_1': lambda: (self.rho / self.P) * self.dPdrho + (1 / self.rho) * self.dPdei,
-        'gamma_3': lambda: 1 + (1 / self.rho) * self.dPdei,
-        'grad_t': lambda: (self.gamma_3 - 1) / self.gamma_1,
-        'cv_prime': lambda: (self.P / (self.rho * self.T)) * (1 / self.gamma_3 - 1),
-        'cp_prime': lambda: (self.P / (self.rho * self.T)) * (self.gamma_1 / (self.gamma_3 - 1)),
+        'gamma_1': lambda: (self['rho'] / self.P) * self.dPdrho + (1 / self['rho']) * self.dPdei,
+        'gamma_3': lambda: 1 + (1 / self['rho']) * self.dPdei,
+        'grad_t': lambda: (self['gamma_3'] - 1) / self['gamma_1'],
+        'cv_prime': lambda: (self.P / (self.rho * self.T)) * (1 / self['gamma_3'] - 1),
+        'cp_prime': lambda: (self.P / (self.rho * self.T)) * (self['gamma_1'] / (self['gamma_3'] - 1)),
         # Hydrodynamic quantities
-        'c_s': lambda: np.sqrt(self.gamma_1 * self.P / self.rho),
-        'M_cs': lambda: self.abs_v / self.c_s,
+        'c_s': lambda: np.sqrt(self['gamma_1'] * self.P / self['rho']),
+        'M_cs': lambda: self['abs_v'] / self['c_s'],
     }
 
-    opta_dict = {
+    self.opta_dict = {
         # OPTA quantities
         'kappa': lambda: self.kappa,
         'opacity': lambda: self.kappa,
@@ -186,10 +212,10 @@ class UIOData():
     }
 
     if self.eos:
-      self.data_dict.update(eos_dict)
+      self.data_dict.update(self.eos_dict)
 
     if self.opta:
-      self.data_dict.update(opta_dict)
+      self.data_dict.update(self.opta_dict)
 
   def initialise_eos_quantities(self):
     rho, ei = self.get_box_quantity('rho'), self.get_box_quantity('ei')
@@ -224,10 +250,12 @@ class UIOData():
       pattern = r'|'.join([f"\{opt}" for opt in opts])
       opt_keys = [o_key.strip() for o_key in re.split(pattern, key)]
 
+      print(opt_keys)
       # Replace expressions in 'key'
       for opt_key in opt_keys:
         key = key.replace(opt_key, f"self['{opt_key}']")
 
+      print(key)
       # Evaluate key
       data = eval(key)
     else:
@@ -236,7 +264,10 @@ class UIOData():
         data = self.mean_box[key].data
 
       else:
-        data = self.data_dict[key]()
+        if 'quc' in key:
+          data = self.box[key].data
+        else:
+          data = self.data_dict[key]()
     # return data.squeeze()
     return data
 
@@ -328,7 +359,8 @@ class UIOData():
     # Load supplied opacity table
     self.opta = opta.Opac(self.opta_path)
 
-  def load_model(self, model_path: str, verbose=False):
+  def load_model(self, model_path: str, verbose=False,
+                 initialise_quantities=False, load_eos=False, load_opta=False):
     model_type = model_path.split('.')[-1]  # either 'full' or 'mean'
     if verbose:
       print(f"Loading model at '{model_path}'")
@@ -371,7 +403,8 @@ class UIOData():
     self.final_snap_idx = len(self.full.dataset) - 1
     self.model_num = model_path.split(
         '/')[-1].split('.')[1]  # assumes a certain format
-    self.update_snapshot(0)
+    self.update_snapshot(0, initialise_quantities=initialise_quantities,
+                         load_eos=load_eos, load_opta=load_opta)
 
     # If 'mean' model has been loaded, init the qlmean quantities and tau
     if self.mean and self.gravity:
@@ -424,6 +457,8 @@ class UIOData():
   def print_properties(self):
     # Simple function to print properties of the instance as well as
     # available keys for plotting for this file
+    eos_loaded = True if self.eos else False
+    opta_loaded = True if self.opta else False
     print("=================")
     print("-----------------")
     print("UIOPlot instance properties:")
@@ -432,11 +467,15 @@ class UIOData():
     print(f"Located at:\t{self.model_path}")
     print(f"Model number:\t{self.model_num}")
     print(f"Current snapshot:\t{self.snap_idx} of {self.final_snap_idx}")
+    print(f"EOS loaded: {eos_loaded}")
+    print(f"OPTA loaded: {opta_loaded}")
     print("-----------------")
-    print(f"Available keys:")
+    print(f"Box keys:")
     print('\n'.join(self.box_keys))
     print("-----------------")
-
+    print(f"Data dict keys:")
+    print('\n'.join([k for k in self.data_dict.keys()]))
+    print("-----------------")
     print("=================")
 
   def get_key_name_units(self, key: str):
@@ -470,29 +509,42 @@ class UIOData():
   # Methods for iterating through snapshots
   # -------------------------------------------------------------------------
 
-  def first_snapshot(self):
-    self.update_snapshot(0)
+  def first_snapshot(self, initialise_quantities=True,
+                     load_eos=False, load_opta=False):
+    self.update_snapshot(0, initialise_quantities=initialise_quantities,
+                         load_eos=load_eos, load_opta=load_opta)
 
-  def final_snapshot(self):
-    self.update_snapshot(self.final_snap_idx)
+  def final_snapshot(self, initialise_quantities=True,
+                     load_eos=False, load_opta=False):
+    self.update_snapshot(self.final_snap_idx,
+                         initialise_quantities=initialise_quantities,
+                         load_eos=load_eos, load_opta=load_opta)
 
-  def prev_snapshot(self):
+  def prev_snapshot(self, initialise_quantities=True,
+                    load_eos=False, load_opta=False):
     # Look for previous model and make it the current model
     potential_idx = self.snap_idx - 1
     if potential_idx < self.first_snap_idx:
       potential_idx = self.first_snap_idx
 
-    self.update_snapshot(potential_idx)
+    self.update_snapshot(potential_idx,
+                         initialise_quantities=initialise_quantities,
+                         load_eos=load_eos, load_opta=load_opta)
 
-  def next_snapshot(self):
+  def next_snapshot(self, initialise_quantities=True,
+                    load_eos=False, load_opta=False):
     # Look for next model and make it the current model
     potential_idx = self.snap_idx + 1
     if potential_idx >= self.final_snap_idx:
       potential_idx = self.final_snap_idx
 
-    self.update_snapshot(potential_idx)
+    self.update_snapshot(potential_idx,
+                         initialise_quantities=initialise_quantities,
+                         load_eos=load_eos, load_opta=load_opta)
 
-  def update_snapshot(self, snap_idx: int, box_idx=2):
+  def update_snapshot(self, snap_idx: int, box_idx=2,
+                      initialise_quantities=True,
+                      load_eos=False, load_opta=False):
     # Update 'snap_idx', 'dataset' and 'box' properties
     self.snap_idx = snap_idx
     if self.full:
@@ -506,56 +558,31 @@ class UIOData():
       self.mean_box_keys = [key for key in self.mean_box.keys()]
 
     # Update quantities
-    self.initialise_quantities()
+    if initialise_quantities:
+      self.initialise_quantities(load_eos=load_eos, load_opta=load_opta)
 
   # -----------------------------------------------------------------------
   # Methods that loop over all snapshots to calculate quantities
   # -----------------------------------------------------------------------
-
-  def average_quantity_over_snapshots(self, key: str, set_min_max=False):
-    # Average the specified 'key' from 'self.box' across all snapshots
-    # Has kwarg for setting the 'min-max' dict instance for this key so
-    # that we don't have to iterate over all the snapshots to do this again
-    # (useful for average quantity analyses)
-    num_snapshots = self.final_snap_idx + 1
-    snap_idx = self.snap_idx  # store reference before iterating
-
-    self.first_snapshot()  # load first snapshot
-    avg_quantity = self.box[key].data
-
-    # Calculate min and max quantities as well
-    if set_min_max:
-      model_min, model_max = np.min(
-          self.box[key].data), np.max(self.box[key].data)
-
-    # Loop over snapshots
-    for i in range(num_snapshots):
-      data = self.box[key].data
-      avg_quantity += data
-
-      if set_min_max:
-        min_data, max_data = np.min(data), np.max(data)
-        if min_data < model_min:
-          model_min = min_data
-        if max_data > model_max:
-          model_max = max_data
-
-      self.next_snapshot()
-
-    avg_quantity /= num_snapshots
-
-    self.update_snapshot(snap_idx)  # revert to original snapshot
-
-    if set_min_max:
-      self.min_max_dict[key] = (model_min, model_max)
-
-    return avg_quantity
-
   def get_quantities_over_snapshots(self, keys: List[str], as_arrays=True) -> Dict:
     # Create a list of quantity 'key' across all snapshots
     num_snapshots = self.final_snap_idx + 1
     snap_idx = self.snap_idx  # store reference before iterating
-    self.first_snapshot()
+
+    # Check if 'eos' and 'opta' need to be loaded
+    load_eos, load_opta = False, False
+    if any([key in self.eos_dict.keys() for key in keys]):
+      load_eos = True
+    if any([key in self.opta_dict.keys() for key in keys]):
+      load_opta = True
+
+    snap_kwargs = {
+        'initialise_quantities': True,
+        'load_eos': load_eos,
+        'load_opta': load_opta
+    }
+    if snap_idx > self.first_snap_idx:
+      self.first_snapshot(**snap_kwargs)
 
     output_quantities = {}
     for i in range(num_snapshots):
@@ -565,13 +592,13 @@ class UIOData():
         else:
           output_quantities[key].append(self[key])
 
-      self.next_snapshot()
+      self.next_snapshot(**snap_kwargs)
 
     # Convert lists to arrays
     if as_arrays:
       output_quantities = {key: np.array(val)
                            for key, val in output_quantities.items()}
-    self.update_snapshot(snap_idx)  # revert to original snapshot
+    self.update_snapshot(snap_idx, **snap_kwargs)  # revert to original snapshot
 
     return output_quantities
 
