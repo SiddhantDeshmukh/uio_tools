@@ -116,7 +116,10 @@ class UIOData():
           # Path not found
           paths.append(None)
           pass
+      else:
+        paths.append(path)
 
+    print([paths])
     return paths
 
   def initialise_quantities(self, load_eos=False, load_opta=False):
@@ -142,11 +145,14 @@ class UIOData():
         # Turn everything into lambda statements and evaluate on return
         # Position (grid cells)
         'x': lambda: x,
-        'xc1': lambda: x,
         'y': lambda: y,
-        'xc2': lambda: y,
         'z': lambda: z,
+        'xc1': lambda: x,
+        'xc2': lambda: y,
         'xc3': lambda: z,
+        'xb1': lambda: self.get_box_quantity('xb1').squeeze(),
+        'xb2': lambda: self.get_box_quantity('xb2').squeeze(),
+        'xb3': lambda: self.get_box_quantity('xb3').squeeze(),
         'xc_all': lambda: [x, y, z],
         # Basic quantities from box
         'rho': lambda: self.get_box_quantity('rho'),
@@ -200,7 +206,8 @@ class UIOData():
         'cp_prime': lambda: (self.P / (self.rho * self.T)) * (self['gamma_1'] / (self['gamma_3'] - 1)),
         # Hydrodynamic quantities
         'c_s': lambda: np.sqrt(self['gamma_1'] * self.P / self['rho']),
-        'M_cs': lambda: self['abs_v'] / self['c_s'],
+        # 'v' is in km/s by default while c_s is cm/s
+        'M_cs': lambda: self['abs_v'] * 1e5 / self['c_s'],
     }
 
     self.opta_dict = {
