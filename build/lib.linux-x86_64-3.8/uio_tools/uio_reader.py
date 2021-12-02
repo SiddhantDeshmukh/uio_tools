@@ -119,7 +119,6 @@ class UIOData():
       else:
         paths.append(path)
 
-    print([paths])
     return paths
 
   def initialise_quantities(self, load_eos=False, load_opta=False):
@@ -257,12 +256,10 @@ class UIOData():
       pattern = r'|'.join([f"\{opt}" for opt in opts])
       opt_keys = [o_key.strip() for o_key in re.split(pattern, key)]
 
-      print(opt_keys)
       # Replace expressions in 'key'
       for opt_key in opt_keys:
         key = key.replace(opt_key, f"self['{opt_key}']")
 
-      print(key)
       # Evaluate key
       data = eval(key)
     else:

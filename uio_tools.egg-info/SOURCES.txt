@@ -1,6 +1,7 @@
 .gitignore
 LICENSE.txt
 README.md
+install
 setup.py
 update.sh
 uio_tools/__init__.py
