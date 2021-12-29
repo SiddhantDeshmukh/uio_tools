@@ -3,7 +3,7 @@ LICENSE.txt
 README.md
 install
 setup.py
-update.sh
+update
 uio_tools/__init__.py
 uio_tools/eos_mm00_l5.eos
 uio_tools/eosinter.py

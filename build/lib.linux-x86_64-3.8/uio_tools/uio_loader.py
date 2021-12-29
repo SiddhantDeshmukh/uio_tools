@@ -28,6 +28,19 @@ class UIOLoader():
     self.current_model = UIOData(
         self.current_model_path, self.eos_file, self.opta_file)
 
+  def load_model_at(self, model_num: int):
+    # Load the current model
+    idx = self.idx
+    try:
+      self.idx = model_num - 1
+      self.current_model_path = f"{self.model_files[self.idx]}"
+      self.current_model = UIOData(
+          self.current_model_path, self.eos_file, self.opta_file)
+    except FileNotFoundError:
+      print(
+          f"Error: No model at {self.current_model_path} (model num {model_num}) does not exist.")
+      self.idx = idx
+
   def load_first_model(self):
     self.idx = 0
     self.load_model()
