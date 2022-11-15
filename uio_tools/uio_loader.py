@@ -2,6 +2,7 @@ from uio_tools.uio_reader import UIOData
 import numpy as np
 import glob
 import os
+import gc
 from typing import List
 
 
@@ -37,6 +38,16 @@ class UIOLoader():
   def load_model(self):
     # Load the current model
     self.current_model_path = f"{self.model_files[self.idx]}"
+    # Close previous files and remove all links
+    if self.current_model:
+      if self.current_model.full:
+        # print("Closing full")
+        self.current_model.full.close()
+      if self.current_model.mean:
+        # print("Closing mean")
+        self.current_model.mean.close()
+    del self.current_model
+    collected = gc.collect()
     self.current_model = UIOData(
         self.current_model_path, self.eos_file, self.opta_file)
 
