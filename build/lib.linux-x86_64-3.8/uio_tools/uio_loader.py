@@ -22,6 +22,18 @@ class UIOLoader():
 
     self.load_model_files()
 
+  def __iter__(self):
+    self.idx = 0
+    return self
+
+  def __next__(self) -> UIOData:
+    if self.idx < len(self.model_files):
+      self.load_model()
+      self.idx += 1
+      return self.current_model
+    self.load_first_model()
+    raise StopIteration
+
   def load_model(self):
     # Load the current model
     self.current_model_path = f"{self.model_files[self.idx]}"
@@ -30,10 +42,13 @@ class UIOLoader():
 
   def load_model_at(self, model_num: int):
     # Load the current model
+    # BUG
     idx = self.idx
     try:
-      self.idx = model_num - 1
+      self.idx = model_num
       self.current_model_path = f"{self.model_files[self.idx]}"
+      # print(
+      #     f"Loading model at {self.current_model_path} (model num {model_num}).")
       self.current_model = UIOData(
           self.current_model_path, self.eos_file, self.opta_file)
     except FileNotFoundError:

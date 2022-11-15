@@ -64,6 +64,7 @@ class UIOData():
     self.final_snap_idx = 0
 
     self.min_max_dict = {}  # min-max tuple for each key
+    self.data_dict = None
 
     # Infer quantities from model name
     self.infer_quantities()
@@ -79,7 +80,7 @@ class UIOData():
 
     # Load the specified model
     self.load_model(model_path, initialise_quantities=True,
-                    load_eos=self.eos_path, load_opta=self.opta_path)
+                    load_eos=True, load_opta=True)
 
     # Save initial and final times
     self.initial_time = self.get_time()
@@ -126,6 +127,9 @@ class UIOData():
     # x, y, z arrays from full file
     self.x, self.y, self.z = self.get_x_vectors(self.box)
     self.v1, self.v2, self.v3 = self.get_velocity_vectors(self.box)
+
+    if self.data_dict == None:
+      self.initialise_data_dict()
 
     if load_eos and self.eos:
       self.initialise_eos_quantities()
@@ -217,11 +221,19 @@ class UIOData():
         'optical depth': lambda: self.tau,
     }
 
+    self.quc_dict = {
+        # QUC quantities
+        q: self.box[q].data for q in self.box_keys if q.startswith('quc')
+    }
+
     if self.eos:
       self.data_dict.update(self.eos_dict)
 
     if self.opta:
       self.data_dict.update(self.opta_dict)
+
+    if self.quc_dict:
+      self.data_dict.update(self.quc_dict)
 
   def initialise_eos_quantities(self):
     rho, ei = self.get_box_quantity('rho'), self.get_box_quantity('ei')
@@ -234,17 +246,14 @@ class UIOData():
   def initialise_opta_quantities(self):
     rho, P, T = self.get_box_quantity('rho'), self.P, self.T
     self.kappa = self.opta.kappa(T, P)
-    self.tau = self.opta.tau(rho, kappa=self.kappa, z=self.z * 1e5, axis=0)
+    self.tau = self.opta.tau(rho, kappa=self.kappa,
+                             zb=self["xb3"].squeeze(), axis=0)
 
   def get_box_quantity(self, key: str):
     # Get quantity from 'box'
     return self.box[key].data
 
   def __getitem__(self, key: str) -> np.ndarray:
-    # !!!
-    # REFACTOR ALERT: Change all the if/elif/else blocks into a big dict
-    # that holds the different quantities to get (how do I do derived?)
-    # !!!
     # Get quantity from current model's current snapshot's box
     data = None
     opts = ['+', '-', '*', '/', '^']
@@ -416,7 +425,7 @@ class UIOData():
 
   def add_qlmean_quantities(self):
     # 'gravity' defined on linear scale
-    self.set_mean_box(2)
+    self.set_mean_box(1)
     # z = self.get_x_vectors(convert_km=False)[2].squeeze()
     xcm = self['kapparho_xmean']
     # tau0 = xcm[-1] / self['rho_xmean'][-1] * \
@@ -550,7 +559,9 @@ class UIOData():
                       initialise_quantities=True,
                       load_eos=False, load_opta=False):
     # Update 'snap_idx', 'dataset' and 'box' properties
+    # BUG
     self.snap_idx = snap_idx
+    # print(f"Loading snapshot at {self.snap_idx}")
     if self.full:
       self.dataset = self.full.dataset[self.snap_idx]
       self.box = self.dataset.box[0]
@@ -649,9 +660,9 @@ class UIOData():
     if not box:
       box = self.box
     # Get 'x', 'y', 'z' from box and squeeze empty dimensions
-    x = box['xc1'].data.squeeze()
-    y = box['xc2'].data.squeeze()
-    z = box['xc3'].data.squeeze()
+    x = np.array(box['xc1'].data.squeeze())
+    y = np.array(box['xc2'].data.squeeze())
+    z = np.array(box['xc3'].data.squeeze())
 
     if convert_km:
       x /= 1e5
