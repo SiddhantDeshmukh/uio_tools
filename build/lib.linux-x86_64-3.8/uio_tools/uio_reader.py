@@ -1,6 +1,5 @@
 # %%
-from posix import listdir
-from uio_tools.uio_utils import initialise_grid, average_data_to_plane
+from uio_tools.uio_utils import initialise_grid, average_data_to_plane, spatial_mean
 from uio_tools.quantities import *
 
 import re
@@ -191,11 +190,15 @@ class UIOData():
         'kinetic energy': lambda: calculate_kinetic_energy(self.rho, self.v1, self.v2, self.v3),
         'ke': lambda: calculate_kinetic_energy(self.rho, self.v1, self.v2, self.v3),
         'momentum': lambda: calculate_momentum(self.rho, self.v1, self.v2, self.v3),
+        # Mean-computed quantities (requires mean file!)
+        'v3rms': lambda: np.sqrt(np.abs(spatial_mean(self['v3'])**2) - spatial_mean(self['v3']**2))
     }
 
     self.eos_dict = {
         # EOS quantities
         'pressure': lambda: self.P,
+        # pressure scale height
+        'Hp': lambda: spatial_mean(self.P) / (spatial_mean(self['rho']) * self.gravity),
         'temperature': lambda: self.T,
         'entropy': lambda: self.S,
         'dpdrho': lambda: self.dPdrho,
