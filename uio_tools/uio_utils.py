@@ -24,9 +24,9 @@ def spatial_mean(arr: np.ndarray, out_axis=0):
   # Average over 2 spatial axes, 'out_axis' is the axis NOT averaged over
   # e.g. if you want to average over axes (1, 2) (conventionally averaging
   # across (x, y)), pass in 'out_axis = 0'
-  axes = [0, 1, 2]
-  axis = axes.pop(out_axis)
-  return np.mean(arr, axis=axis)
+  axis = [0, 1, 2]
+  axis.pop(out_axis)
+  return np.mean(arr, axis=tuple(axis))
 
 
 # -------------------------------------------------------------------------

@@ -191,7 +191,7 @@ class UIOData():
         'ke': lambda: calculate_kinetic_energy(self.rho, self.v1, self.v2, self.v3),
         'momentum': lambda: calculate_momentum(self.rho, self.v1, self.v2, self.v3),
         # Mean-computed quantities (requires mean file!)
-        'v3rms': lambda: np.sqrt(np.abs(spatial_mean(self['v3'])**2) - spatial_mean(self['v3']**2))
+        'v3rms': lambda: np.sqrt(np.abs(spatial_mean(self['v3'])**2 - spatial_mean(self['v3']**2)))
     }
 
     self.eos_dict = {
